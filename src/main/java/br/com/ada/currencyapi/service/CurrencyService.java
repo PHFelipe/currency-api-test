@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 public class CurrencyService {
 
     private final CurrencyRepository currencyRepository;
+    private final CurrencyClient currencyClient;
 
     public List<CurrencyResponse> get() {
         List<Currency> currencies = currencyRepository.findAll();
@@ -77,5 +78,25 @@ public class CurrencyService {
         return request.getAmount().multiply(exchange);
     }
 
+    private BigDecimal getAmountAPI(ConvertCurrencyRequest request) throws CoinNotFoundException {
+        Currency from = currencyRepository.findByName(request.getFrom());
+
+        if (Objects.isNull(from)) {
+            throw new CoinNotFoundException(String.format("Coin not found: %s", request.getFrom()));
+        }
+
+        StringBuilder code = new StringBuilder();
+        code.append(request.getFrom());
+        code.append("-");
+        code.append(request.getTo());
+
+        BigDecimal AmountExchange = currencyClient.getCurrencyQuote(code.toString()).get(code.toString().replace("-", "")).low();
+
+        if (Objects.isNull(AmountExchange)) {
+            throw new CoinNotFoundException(String.format("Exchange %s not found for %s", request.getTo(), request.getFrom()));
+        }
+
+        return request.getAmount().multiply(AmountExchange);
+    }
 
 }
