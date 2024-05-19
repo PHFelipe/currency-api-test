@@ -36,6 +36,11 @@ public class CurrencyService {
     }
 
     public Long create(CurrencyRequest request) throws CurrencyException {
+
+        if (Objects.isNull(request.getName())) {
+            throw new CurrencyException("Coin name cannot be null");
+        }
+
         Currency currency = currencyRepository.findByName(request.getName());
 
         if (Objects.nonNull(currency)) {
@@ -51,6 +56,7 @@ public class CurrencyService {
     }
 
     public void delete(Long id) {
+        Currency Exists = currencyRepository.findById(id).orElseThrow(() -> new CoinNotFoundException("Coin not found"));
         currencyRepository.deleteById(id);
     }
 
@@ -60,6 +66,13 @@ public class CurrencyService {
                 .amount(amount)
                 .build();
 
+    }
+
+    public ConvertCurrencyResponse convertAPI(String from, String to, BigDecimal amount) throws CoinNotFoundException {
+        BigDecimal amountAPI = getAmountAPI(new ConvertCurrencyRequest(from, to, amount));
+        return ConvertCurrencyResponse.builder()
+                .amount(amountAPI)
+                .build();
     }
 
     private BigDecimal getAmount(ConvertCurrencyRequest request) throws CoinNotFoundException {

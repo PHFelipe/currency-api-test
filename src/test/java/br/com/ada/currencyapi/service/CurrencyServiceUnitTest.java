@@ -1,5 +1,6 @@
 package br.com.ada.currencyapi.service;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -10,11 +11,13 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -40,38 +43,120 @@ public class CurrencyServiceUnitTest {
     @Mock
     private CurrencyRepository currencyRepository;
 
-    @Test
-    void testGetCurrencies() {
-        List<Currency> list = new ArrayList<>();
-        list.add(Currency.builder()
+    private final List<Currency> coinsOfTest = new ArrayList<>();
+
+    @BeforeEach
+    void setUp(){
+        coinsOfTest.add(Currency.builder()
                 .id(1L)
-                .name("LCS")
-                .description("Moeda do lucas")
-                .build());
-        list.add(Currency.builder()
+                .name("EUR")
+                .description("Euro is a member of the eurozone")
+                .exchanges(new HashMap<>()).build());
+        coinsOfTest.add(Currency.builder()
                 .id(2L)
-                .name("YAS")
-                .description("Moeda da yasmin")
-                .build());
-
-        when(currencyRepository.findAll()).thenReturn(list);
-
-        List<CurrencyResponse> responses = currencyService.get();
-        Assertions.assertNotNull(responses);
-        Assertions.assertEquals(2, responses.size());
-        Assertions.assertEquals("1 - LCS", responses.get(0).getLabel());
-        Assertions.assertEquals("2 - YAS", responses.get(1).getLabel());
-
+                .name("USD")
+                .description("US Dollar coin of the United States of America")
+                .exchanges(new HashMap<>()).build());
+        coinsOfTest.add(Currency.builder()
+                .id(3L)
+                .name("R$")
+                .description("Real coin of Brazil")
+                .exchanges(new HashMap<>()).build());
     }
 
     @Test
-    void testCreateCurrency() {
+    void GetCurrencies() {
+        when(currencyRepository.findAll()).thenReturn(coinsOfTest);
+
+        List<CurrencyResponse> responses = currencyService.get();
+
+        Assertions.assertNotNull(responses);
+        assertThat(responses).hasSize(3);
+        Assertions.assertEquals("1 - EUR", responses.get(0).getLabel());
+        Assertions.assertEquals("2 - USD", responses.get(1).getLabel());
+        Assertions.assertEquals("3 - R$", responses.get(2).getLabel());
+    }
+
+    @Test
+    void getCurrenciesEmpty() {
+        when(currencyRepository.findAll()).thenReturn(new ArrayList<>());
+
+        List<CurrencyResponse> responses = currencyService.get();
+        Assertions.assertNotNull(responses);
+        assertThat(responses).hasSize(0);
+    }
+
+    @Test
+    void createCoin(){
+        when(currencyRepository.findByName(Mockito.anyString())).thenReturn(null);
+        when(currencyRepository.save(Mockito.any(Currency.class))).thenReturn(coinsOfTest.get(2));
+
+        CurrencyRequest request = new CurrencyRequest();
+        request.setName("R$");
+        request.setDescription("Real coin of Brazil");
+        request.setExchanges(new HashMap<>());
+
+        Long id = currencyService.create(request);
+        Assertions.assertNotNull(id);
+
+        assertThat(id).isEqualTo(3L);
+
+        verify(currencyRepository, times(1)).findByName(Mockito.anyString());
+        verify(currencyRepository, times(1)).save(Mockito.any(Currency.class));
+        verifyNoMoreInteractions(currencyRepository);
+    }
+
+    @Test
+    void createCoinAlreadyExists() {
+        Mockito.when(currencyRepository.findByName(Mockito.anyString())).thenReturn(coinsOfTest.get(1));
+
+        CurrencyRequest request = new CurrencyRequest();
+        request.setName("USD");
+        request.setDescription("US Dollar coin of the United States of America");
+        request.setExchanges(new HashMap<>());
+
+        CurrencyException exception = Assertions.assertThrows(CurrencyException.class, () -> currencyService.create(request));
+        Assertions.assertEquals("Coin already exists", exception.getMessage());
+    }
+
+    @Test
+    void createCurrency() {
         Mockito.when(currencyRepository.findByName(anyString())).thenReturn(null);
         Mockito.when(currencyRepository.save(any(Currency.class))).thenReturn(Currency.builder().id(3L).build());
 
         Long id = currencyService.create(CurrencyRequest.builder().name("name").build());
         Assertions.assertNotNull(id);
 
+    }
+
+    @Test
+    void createCurrencyWithNullName() {
+        CurrencyRequest request = new CurrencyRequest();
+        request.setName(null);
+        request.setDescription("US Dollar coin of the United States of America");
+        request.setExchanges(new HashMap<>());
+
+        assertThatThrownBy(()-> currencyService.create(request))
+                .isInstanceOf(CurrencyException.class)
+                .hasMessage("Coin name cannot be null");
+    }
+
+    @Test
+    void deleteCoinNotFound() {
+        Mockito.when(currencyRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(()-> currencyService.delete(1L))
+                .isInstanceOf(CoinNotFoundException.class)
+                .hasMessage("Coin not found");
+    }
+
+    @Test
+    void deleteCoin() {
+        Mockito.when(currencyRepository.findById(3L)).thenReturn(Optional.ofNullable(coinsOfTest.get(2)));
+
+        currencyService.delete(3L);
+        verify(currencyRepository, times(1)).deleteById(3L);
+        verifyNoMoreInteractions(currencyRepository);
     }
 
     @Test
