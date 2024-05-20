@@ -14,8 +14,8 @@ public record CurrencyQuote(
         BigDecimal low,
         String varBid,
         String pctChange,
-        String bid,
-        String ask,
+        BigDecimal bid,
+        BigDecimal ask,
         String timestamp,
         String create_date
 ) {}

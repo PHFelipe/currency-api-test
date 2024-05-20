@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.SimpleTimeZone;
 
 import org.springframework.stereotype.Service;
 
@@ -68,8 +69,8 @@ public class CurrencyService {
 
     }
 
-    public ConvertCurrencyResponse convertAPI(String from, String to, BigDecimal amount) throws CoinNotFoundException {
-        BigDecimal amountAPI = getAmountAPI(new ConvertCurrencyRequest(from, to, amount));
+    public ConvertCurrencyResponse convertAPI(ConvertCurrencyRequest request) throws CoinNotFoundException {
+        BigDecimal amountAPI = getAmountAPI(request);
         return ConvertCurrencyResponse.builder()
                 .amount(amountAPI)
                 .build();
@@ -103,13 +104,13 @@ public class CurrencyService {
         code.append("-");
         code.append(request.getTo());
 
-        BigDecimal AmountExchange = currencyClient.getCurrencyQuote(code.toString()).get(code.toString().replace("-", "")).low();
+        try {
+            BigDecimal AmountExchange = currencyClient.getCurrencyQuote(code.toString()).get(code.toString().replace("-", "")).low();
+            return request.getAmount().multiply(AmountExchange);
 
-        if (Objects.isNull(AmountExchange)) {
+        }catch(Exception e){
             throw new CoinNotFoundException(String.format("Exchange %s not found for %s", request.getTo(), request.getFrom()));
         }
 
-        return request.getAmount().multiply(AmountExchange);
     }
-
 }
