@@ -4,13 +4,11 @@ import br.com.ada.currencyapi.domain.*;
 import br.com.ada.currencyapi.exception.CoinNotFoundException;
 import br.com.ada.currencyapi.exception.CurrencyException;
 import br.com.ada.currencyapi.repository.CurrencyRepository;
-import jakarta.transaction.Transactional;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.web.WebAppConfiguration;
 
 import java.math.BigDecimal;
@@ -21,7 +19,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @SpringBootTest
 @WebAppConfiguration
@@ -32,13 +29,11 @@ public class CurrencyServiceIntegrationTest {
     @Autowired
     private CurrencyRepository currencyRepository;
 
-    @MockBean
-    private CurrencyClient currencyClient;
 
     @BeforeEach
      public void setUp(){
         List<Currency> coinsOfTest = new ArrayList<>();
-        coinsOfTest.add(Currency.builder().id(1L).name("USD").exchanges(new HashMap<>()).build());
+        coinsOfTest.add(Currency.builder().id(1L).name("USD").exchanges(Map.of("EUR", BigDecimal.valueOf(2.0))).build());
         coinsOfTest.add(Currency.builder().id(2L).name("EUR").exchanges(new HashMap<>()).build());
         coinsOfTest.add(Currency.builder().id(3L).name("JPY").exchanges(new HashMap<>()).build());
         coinsOfTest.add(Currency.builder().id(4L).name("BRL").exchanges(new HashMap<>()).build());
@@ -98,8 +93,6 @@ public class CurrencyServiceIntegrationTest {
         assertThatThrownBy(()-> currencyService.create(request))
                 .isInstanceOf(CurrencyException.class)
                 .hasMessage("Coin name cannot be null");
-
-        verifyNoMoreInteractions(currencyClient);
     }
 
     @Test
@@ -112,8 +105,6 @@ public class CurrencyServiceIntegrationTest {
         assertThatThrownBy(()-> currencyService.create(request))
                 .isInstanceOf(CurrencyException.class)
                 .hasMessage("Coin already exists");
-
-        verifyNoMoreInteractions(currencyClient);
 
     }
 
@@ -137,10 +128,6 @@ public class CurrencyServiceIntegrationTest {
 
     @Test
     void convert() {
-        Currency coin = currencyRepository.findByName("USD");
-        coin.setExchanges(Map.of("EUR", BigDecimal.ONE));
-        currencyRepository.save(coin);
-
         ConvertCurrencyRequest request = new ConvertCurrencyRequest();
         request.setTo("EUR");
         request.setFrom("USD");
@@ -148,7 +135,56 @@ public class CurrencyServiceIntegrationTest {
 
         ConvertCurrencyResponse response = currencyService.convert(request);
 
-        Assertions.assertThat(response.getAmount()).isEqualTo(BigDecimal.ONE);
+        Assertions.assertThat(response.getAmount().toString()).isEqualTo("2.00");
     }
+
+    @Test
+    void convertExchangeNotFound() {
+        ConvertCurrencyRequest request = new ConvertCurrencyRequest();
+        request.setTo("EUR");
+        request.setFrom("RUB");
+        request.setAmount(BigDecimal.ONE);
+
+        assertThatThrownBy(()-> currencyService.convert(request))
+                .isInstanceOf(CoinNotFoundException.class)
+                .hasMessage("Exchange EUR not found for RUB");
+    }
+
+    @Test
+    void convertWithAPI(){
+        ConvertCurrencyRequest request = new ConvertCurrencyRequest();
+        request.setTo("EUR");
+        request.setFrom("USD");
+        request.setAmount(BigDecimal.ONE);
+
+        ConvertCurrencyResponse response = currencyService.convertAPI(request);
+
+        assertThat(response).isNotNull();
+    }
+
+    @Test
+    void convertWithAPICoinNotFound() {
+        ConvertCurrencyRequest request = new ConvertCurrencyRequest();
+        request.setTo("USD");
+        request.setFrom("ETH");
+        request.setAmount(BigDecimal.ONE);
+
+        assertThatThrownBy(() -> currencyService.convertAPI(request))
+                .isInstanceOf(CoinNotFoundException.class)
+                .hasMessage("Coin not found: ETH");
+    }
+
+    @Test
+    void convertWithAPIExchangeNotFound () {
+        ConvertCurrencyRequest request = new ConvertCurrencyRequest();
+        request.setTo("ETH");
+        request.setFrom("USD");
+        request.setAmount(BigDecimal.ONE);
+
+        assertThatThrownBy(() -> currencyService.convertAPI(request))
+                .isInstanceOf(CoinNotFoundException.class)
+                .hasMessage("Exchange ETH not found for USD");
+    }
+
 
 }
